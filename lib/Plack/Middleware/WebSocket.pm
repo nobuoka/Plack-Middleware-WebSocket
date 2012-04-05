@@ -52,15 +52,25 @@ sub handshake {
         my $key = $env->{'HTTP_SEC_WEBSOCKET_KEY'};
         my $kk  = $key . '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
         $digest = MIME::Base64::encode_base64( Digest::SHA1::sha1( $kk ) );
+        # これでよい? ($digest の末尾に改行文字 (?) が含まれているのはなぜか)
+        chomp $digest;
     }
 
     $fh->autoflush;
+
+
+#    return [
+#        'Upgrade'             , 'websocket',
+#        'Connection'          , 'Upgrade'  ,
+#        'Sec-WebSocket-Accept', $digest    ,
+#    ];
 
     print $fh join "\015\012", (
         'HTTP/1.1 101 Switching Protocols',
         'Upgrade: websocket',
         'Connection: Upgrade',
         'Sec-WebSocket-Accept: ' . $digest,
+        '',
         '',
     );
 
