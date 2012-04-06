@@ -27,6 +27,7 @@ sub new {
     $handle->on_eof ( sub { _eof ( $weaken_self, @_ ) } );
 
     $self->{handle} = $handle;
+    $self->{already_send_close_frame} = !!1;
     return $self;
 }
 
@@ -113,6 +114,11 @@ sub onclose {
 sub _send_close_frame {
     my $self = shift;
 
+    # TODO 既に送っている場合は...?
+    if ( $self->{already_send_close_frame} ) {
+        return;
+    }
+
     # 長さの取得
     my $len = 0; #length( $data );
     my $ext_len = undef;
@@ -145,6 +151,7 @@ sub _send_close_frame {
     #$bytes .= $data; # payload data
 
     $self->{handle}->push_write( $bytes );
+    $self->{already_send_close_frame} = 1;
 }
 
 # フレームが送られてきたらとりあえずここにくる
@@ -160,6 +167,16 @@ sub _receive_frame {
         # control frames MUST NOT be fragmented
         # control frames MAY be injected in the middle of a fragmented message
         # TODO
+
+        # Close frame
+        if ( $frame->{opcode} == 0x08 ) {
+            # まだ close フレームを送っていない場合は送る
+            if ( not $self->{already_send_close_frame} ) {
+                $self->_send_close_frame();
+            }
+            # ソケットを閉じる
+            $self->{handle}->push_shutdown();
+        }
     }
     # message frames
     else {
