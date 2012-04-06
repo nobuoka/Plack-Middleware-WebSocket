@@ -22,7 +22,7 @@ Plack::Middleware::WebSocket - Support WebSocket implementation
 =head1 DESCRIPTION
 
 Plack::Middleware::WebSocket provides WebSocket implementation through $env->{'websocket.impl'}.
-Currently implements draft-ietf-hybi-thewebsocketprotocol-00 <http://tools.ietf.org/html/draft-ietf-hybi-thewebsocketprotocol-00>.
+Currently implements RFC 6455 <http://tools.ietf.org/html/rfc6455>.
 
 =head1 METHODS
 
