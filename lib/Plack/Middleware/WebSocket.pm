@@ -58,7 +58,6 @@ sub handshake {
 
     $fh->autoflush;
 
-
 #    return [
 #        'Upgrade'             , 'websocket',
 #        'Connection'          , 'Upgrade'  ,
@@ -75,23 +74,6 @@ sub handshake {
     );
 
     return $fh;
-}
-
-package AnyEvent::Handle::Message::WebSocket;
-
-sub anyevent_write_type {
-    my ($handle, @args) = @_;
-    return join '', "\x00", @args, "\xff";
-}
-
-sub anyevent_read_type {
-    my ($handle, $cb) = @_;
-
-    return sub {
-        $_[0]{rbuf} =~ s/\x00(.*?)\xff// or return;
-        $cb->($_[0], $1);
-        1;
-    };
 }
 
 1;
@@ -122,7 +104,7 @@ Plack::Middleware::WebSocket - Support WebSocket implementation
 =head1 DESCRIPTION
 
 Plack::Middleware::WebSocket provides WebSocket implementation through $env->{'websocket.impl'}.
-Currently implements draft-ietf-hybi-thewebsocketprotocol-00 <http://tools.ietf.org/html/draft-ietf-hybi-thewebsocketprotocol-00>.
+Currently implements RFC 6455 <http://tools.ietf.org/html/rfc6455>.
 
 =head1 METHODS
 

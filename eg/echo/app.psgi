@@ -1,6 +1,7 @@
 #!perl
 use strict;
 use warnings;
+use utf8;
 use FindBin qw($Bin);
 use lib "$Bin/../../lib";
 
@@ -8,6 +9,7 @@ use Plack::Builder;
 use Plack::Request;
 use AnyEvent;
 use AnyEvent::Handle;
+use WebSocket::ServerAgent;
 
 my $DATA = do { local $/; scalar <DATA> };
 
@@ -27,47 +29,46 @@ my $app = sub {
         $res->content($data);
     }
     elsif ($req->path eq '/echo') {
-        if (my $fh = $env->{'websocket.impl'}->handshake) {
-            return start_ws_echo($fh);
+        if ( my $fh = $env->{'websocket.impl'}->handshake ) {
+            return start_ws_echo( $fh );
         }
         $res->code($env->{'websocket.impl'}->error_code);
     }
     else {
         $res->code(404);
     }
-    
+
     return $res->finalize;
 };
 
 sub start_ws_echo {
     my ($fh) = @_;
 
-    my $handle = AnyEvent::Handle->new(fh => $fh);
+    my $agent = WebSocket::ServerAgent->new( $fh );
     return sub {
         my $respond = shift;
+        $agent->onclose( sub {
+            warn '[DEBUG] on close!!!';
+            # 循環参照を断つ
+            undef $agent;
+        } );
+        $agent->onmessage( sub {
+            my ( $message ) = @_;
+            warn '[DEBUG] on message: ' . $message;
 
-        on_read $handle sub {
-            shift->push_read(
-                'AnyEvent::Handle::Message::WebSocket',
-                sub {
-                    my $msg = $_[1];
-                    my $w; $w = AE::timer 1, 0, sub {
-                        $handle->push_write(
-                            'AnyEvent::Handle::Message::WebSocket',
-                            $msg,
-                        );
-                        undef $w;
-                    };
-                },
-            );
-        };
+            # echo (delay)
+            my $w; $w = AE::timer 1, 0, sub {
+                $agent->send_text( $message );
+                undef $w;
+            };
 
-        on_error $handle sub {
-            warn "error: $_[2]";
-            $respond->([
-                500, [ 'Content-Type', 'text/plain' ], [ "error: $_[2]" ],
-            ]);
-        };
+            # close if message is 'close'
+            if ( $message eq 'close' ) {
+                warn '[DEBUG] to be closed...';
+                $agent->close();
+            }
+        } );
+        return;
     };
 }
 
@@ -80,6 +81,7 @@ __DATA__
 <!DOCTYPE html>
 <html>
   <head>
+    <meta charset="UTF-8">
     <title>Plack::Middleware::WebSocket</title>
     <script type="text/javascript" src="http://ajax.googleapis.com/ajax/libs/jquery/1.4.2/jquery.min.js"></script>
     <style type="text/css">
