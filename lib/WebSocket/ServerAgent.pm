@@ -23,8 +23,9 @@ sub new {
     # 実際には eof で undef して切るのが良い?
     weaken( my $weaken_self = $self );
     my $handle = AnyEvent::Handle->new( fh => $sock );
-    $handle->on_read( sub { _read( $weaken_self, @_ ) } );
-    $handle->on_eof ( sub { _eof ( $weaken_self, @_ ) } );
+    $handle->on_read ( sub { _read ( $weaken_self, @_ ) } );
+    $handle->on_error( sub { _error( $weaken_self, @_ ) } );
+    $handle->on_eof  ( sub { _eof  ( $weaken_self, @_ ) } );
 
     $self->{handle} = $handle;
     $self->{already_send_close_frame} = !!1;
@@ -86,29 +87,27 @@ sub close {
     $self->_send_close_frame();
 }
 
-sub onmessage {
+sub _set_or_get_callback {
     my $self = shift;
-    my ( $cb ) = @_;
+    my ( $name, $cb ) = @_;
+    warn '[DEBUG] callback : ' . $cb;
     if ( $cb ) {
-        return $self->{onmessage_cb} = $cb;
+        return $self->{$name} = $cb;
     } else {
-        return $self->{onmessage_cb};
+        return $self->{$name};
     }
+}
+
+sub onmessage {
+    shift->_set_or_get_callback( 'onmessage_cb', @_ );
 }
 
 sub onerror {
-    my $self = shift;
-    warn 'on error';
+    shift->_set_or_get_callback( 'onerror_cb', @_ );
 }
 
 sub onclose {
-    my $self = shift;
-    my ( $cb ) = @_;
-    if ( $cb ) {
-        return $self->{onclose_cb} = $cb;
-    } else {
-        return $self->{onclose_cb};
-    }
+    shift->_set_or_get_callback( 'onclose_cb', @_ );
 }
 
 sub _send_close_frame {
@@ -293,7 +292,9 @@ sub _read_payload {
 }
 
 sub _error {
-    # TODO implement
+    my $self = shift;
+    my ( $handle, $fatal, $msg ) = @_;
+    $self->_do_onerror( $msg, $fatal );
 }
 
 sub _eof {
@@ -306,17 +307,24 @@ sub _eof {
 # event handler の実行
 #---------------------
 
-sub _do_onclose {
-    my $self = shift;
-    my $cb = $self->{onclose_cb};
-    $cb->() if ( $cb );
-}
-
 sub _do_onmessage {
     my $self = shift;
     my ( $message ) = @_;
     my $cb = $self->{onmessage_cb};
-    $cb->( $message ) if ( $cb );
+    $cb->( $message ) if $cb;
+}
+
+sub _do_onerror {
+    my $self = shift;
+    my ( $message, $fatal ) = @_;
+    my $cb = $self->{onerror_cb};
+    $cb->( $message ) if $cb;
+}
+
+sub _do_onclose {
+    my $self = shift;
+    my $cb = $self->{onclose_cb};
+    $cb->() if $cb;
 }
 
 sub DESTROY {
